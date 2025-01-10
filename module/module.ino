@@ -54,9 +54,6 @@ void setup() {
   digitalWrite(IN3_PIN, LOW);
   digitalWrite(IN4_PIN, LOW);
 
-  // Configure button pin with internal pull-up resistor
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-
   // Initialize camera
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -103,13 +100,30 @@ void setup() {
 }
 
 void loop() {
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    Serial.println("Button pressed. Starting process...");
-    lcd.setCursor(0, 0);
-    lcd.print("Process Started ");
-
-    startProcess();
-    delay(2000);  // Debounce delay
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String status_url = String(api_url) + "/status";
+    http.begin(status_url);
+    
+    int httpResponseCode = http.GET();
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      if (response.indexOf("scanning") != -1) {
+        Serial.println("Scan command received. Starting process...");
+        lcd.setCursor(0, 0);
+        lcd.print("Process Started ");
+        startProcess();
+      }
+    }
+    
+    http.end();
+    delay(1000);  // Poll every second
+  } else {
+    // Try to reconnect to WiFi
+    WiFi.begin(ssid, password);
+    lcd.setCursor(0, 1);
+    lcd.print("WiFi Reconnect ");
+    delay(5000);
   }
 }
 

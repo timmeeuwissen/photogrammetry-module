@@ -11,9 +11,6 @@
 #define IN3_PIN 15  // GPIO15
 #define IN4_PIN 13  // GPIO13
 
-// Button Pin (GPIO16 is available on HW-297)
-#define BUTTON_PIN 16
-
 // LCD Configuration (I2C pins for ESP32-CAM HW-297)
 #define SDA_PIN 26  // GPIO26 (SIOD)
 #define SCL_PIN 27  // GPIO27 (SIOC)

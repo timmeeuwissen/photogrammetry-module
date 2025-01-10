@@ -1,4 +1,4 @@
-.PHONY: install start venv esp32-deps flash-esp32 server-deps erase reset config build
+.PHONY: install start venv esp32-deps flash-esp32 server-deps erase reset config build scan
 
 # ESP32 Settings
 -include .device.env
@@ -106,9 +106,26 @@ clean:
 	rm -rf build/
 	rm -rf venv/
 
+# Scan target
+scan:
+	@echo "Starting scan process..."
+	@if ! curl -s http://localhost:8888/api/status > /dev/null; then \
+		echo "Server not running. Starting server..."; \
+		$(MAKE) start & \
+		sleep 2; \
+	fi
+	@curl -s -X POST http://localhost:8888/api/start
+	@echo "\nWaiting for scan to complete..."
+	@while [ "$$(curl -s http://localhost:8888/api/status | grep -o '"status":"[^"]*"' | cut -d'"' -f4)" = "scanning" ]; do \
+		echo -n "."; \
+		sleep 1; \
+	done
+	@echo "\nScan completed"
+
 # Help target
 help:
 	@echo "Available targets:"
+	@echo "  scan         - Start a new scan"
 	@echo "  select-device - Select a serial device to use"
 	@echo "  install      - Install all dependencies"
 	@echo "  config      - Create config.h from template if it doesn't exist"
