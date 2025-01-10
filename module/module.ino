@@ -16,14 +16,21 @@ const char* api_url = API_URL;
 LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLS, LCD_ROWS); // I2C address 0x27, 16 columns, 2 rows
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  Serial.println("Setup started.");
+
   delay(2000);
   
   // Initialize LCD
+  Serial.println("Setting SDA and SCL pins.");
   Wire.begin(SDA_PIN, SCL_PIN);
+
+  Serial.println("Initialising the LCD screen.");
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
+
+  Serial.println("Printing first chars on LCD.");
   lcd.print("Initializing...");
 
 
