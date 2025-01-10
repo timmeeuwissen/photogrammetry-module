@@ -42,6 +42,15 @@ def start_scan():
     set_scan_status("scanning")
     return jsonify({"message": "Scan started"}), 200
 
+@app.route('/api/abort', methods=['POST'])
+def abort_scan():
+    current_status = get_scan_status()
+    if current_status != "scanning":
+        return jsonify({"error": "No scan in progress"}), 409
+    
+    set_scan_status("idle")
+    return jsonify({"message": "Scan aborted"}), 200
+
 @app.route('/api/status', methods=['GET'])
 def check_status():
     return jsonify({"status": get_scan_status()}), 200

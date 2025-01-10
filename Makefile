@@ -14,18 +14,14 @@ list-devices:
 	@echo "\nOther Serial Devices:"
 	@ls -1 /dev/cu.* 2>/dev/null | grep -v "usbserial-" || echo "No other serial devices found"
 
-select-device: list-devices
-	@if ! ls /dev/cu.usbserial-* 1>/dev/null 2>&1; then \
-		echo "\nNo USB-TTL adapters found. Please check:"; \
-		echo "1. USB-TTL adapter is connected"; \
-		echo "2. Try a different USB port"; \
-		echo "3. Verify adapter drivers are installed"; \
-		exit 1; \
-	fi
-	@echo "\nSelect a USB-TTL adapter:"
-	@ls /dev/cu.usbserial-* | nl
-	@read -p "Selection [1-$$(ls /dev/cu.usbserial-* | wc -l | tr -d ' ')]: " num && \
-	device=$$(ls /dev/cu.usbserial-* | sed -n "$${num}p") && \
+select-device:
+	@echo "Available serial devices:"
+	@echo "USB-TTL Adapters:"
+	@ls -1 /dev/cu.usbserial-* 2>/dev/null || echo "No USB-TTL adapters found"
+	@echo "\nOther Serial Devices:"
+	@ls -1 /dev/cu.* 2>/dev/null | grep -v "usbserial-" || echo "No other serial devices found"
+	@echo "\nEnter the full path of the device to use (e.g., /dev/cu.usbserial-1410):"
+	@read -p "> " device && \
 	if [ -e "$$device" ]; then \
 		echo "DEVICE=$$device" > $(DEVICE_ENV_FILE) && \
 		echo "\nSelected device: $$device"; \
@@ -35,7 +31,7 @@ select-device: list-devices
 			./test_serial.sh; \
 		fi \
 	else \
-		echo "\nInvalid selection"; \
+		echo "\nError: Device $$device does not exist"; \
 		exit 1; \
 	fi
 
@@ -59,7 +55,7 @@ check-device:
 		exit 1; \
 	fi
 	@CURRENT_DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
-	if [ ! -e "$$CURRENT_DEVICE" ] || ! echo "$$CURRENT_DEVICE" | grep -q "^/dev/cu.usbserial-"; then \
+	if [ ! -e "$$CURRENT_DEVICE" ]; then \
 		echo "Invalid or missing device: $$CURRENT_DEVICE"; \
 		echo "Please select a valid device:"; \
 		$(MAKE) select-device; \
@@ -197,15 +193,41 @@ monitor: check-device ensure-port
 
 erase: check-device ensure-port
 	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(CONNECT_SPEED) erase_flash
+	$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(UPLOAD_SPEED) erase_flash
 
 reset: check-device ensure-port
 	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(CONNECT_SPEED) read_mac
+	$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(UPLOAD_SPEED) read_mac
 
 clean:
 	rm -rf build/
 	rm -rf venv/
+
+# Server control targets
+abort:
+	@echo "Aborting scan..."
+	@if ! curl -s -X POST http://localhost:8888/api/abort > /dev/null; then \
+		echo "Failed to abort scan. Is the server running?"; \
+		exit 1; \
+	fi
+	@echo "Scan aborted"
+
+stop:
+	@echo "Stopping server..."
+	@PID=$$(ps aux | grep "[p]ython3 server.py" | awk '{print $$2}') && \
+	PORT_PID=$$(lsof -ti:8888) && \
+	if [ -n "$$PID" ] || [ -n "$$PORT_PID" ]; then \
+		if [ -n "$$PID" ]; then \
+			kill $$PID 2>/dev/null || kill -9 $$PID; \
+			echo "Server stopped (PID: $$PID)"; \
+		fi; \
+		if [ -n "$$PORT_PID" ]; then \
+			kill $$PORT_PID 2>/dev/null || kill -9 $$PORT_PID; \
+			echo "Killed process using port 8888 (PID: $$PORT_PID)"; \
+		fi \
+	else \
+		echo "Server not running"; \
+	fi
 
 # Scan target
 scan:
@@ -228,7 +250,7 @@ help:
 	@echo "Available targets:"
 	@echo "Device Management:"
 	@echo "  list-devices  - List all available serial devices"
-	@echo "  select-device - Select and configure a USB-TTL adapter"
+	@echo "  select-device - Select and configure a serial device"
 	@echo "  echo-port     - Show currently configured device port"
 	@echo
 	@echo "Build & Flash:"
@@ -242,7 +264,9 @@ help:
 	@echo
 	@echo "Server Control:"
 	@echo "  start        - Start the server"
+	@echo "  stop         - Stop the server"
 	@echo "  scan         - Start a new scan"
+	@echo "  abort        - Abort current scan"
 	@echo
 	@echo "Setup:"
 	@echo "  install      - Install all dependencies"
