@@ -1,0 +1,68 @@
+ESP32-CAM Flashing Instructions
+============================
+
+1. Hardware Setup
+----------------
+Before connecting power:
+a. Connect USB-TTL adapter to ESP32-CAM HW-297:
+   - USB-TTL GND  -> ESP32-CAM GND
+   - USB-TTL RX   -> ESP32-CAM IO1 (U0T)
+   - USB-TTL TX   -> ESP32-CAM IO3 (U0R)
+   - USB-TTL 3.3V -> ESP32-CAM 5V or 3V3 (board has voltage regulator)
+   - Connect GPIO0 to GND (required for flash mode)
+
+2. Flashing Process
+------------------
+1. With GPIO0 connected to GND:
+   a. Connect USB-TTL adapter to computer
+   b. Wait 1-2 seconds
+   c. Press and hold RESET button on ESP32-CAM
+   d. Run the flash command: make flash-esp32
+   e. Release RESET button immediately after running the command
+   f. You should see "Connecting..." in the output
+
+3. After Flashing
+----------------
+1. Disconnect power (unplug USB-TTL)
+2. Remove GPIO0 to GND connection
+3. Reconnect power for normal operation
+
+4. Troubleshooting
+-----------------
+If "No serial data received" error:
+1. Double-check all connections:
+   - Verify RX/TX are crossed (ESP32 TX → USB-TTL RX)
+   - Check GPIO0 is solidly connected to GND
+   - Ensure all wires are firmly connected
+
+2. Try this reset sequence:
+   a. Unplug USB-TTL
+   b. Hold RESET button
+   c. Plug in USB-TTL
+   d. Release RESET
+   e. Immediately run: make flash-esp32
+
+3. Power supply checks:
+   - Board has built-in voltage regulator, can use 3.3V or 5V
+   - Ensure USB-TTL can supply enough current
+   - Try a different USB port (some ports provide more power)
+   - Add a capacitor (10µF) between 3.3V and GND if available
+
+4. Connection verification:
+   - Check if device shows up in: ls /dev/cu.*
+   - Try unplugging and replugging USB-TTL
+   - Try a different USB cable
+   - Verify USB-TTL adapter is working with a different device
+
+5. Software checks:
+   - Current baud rate: 9600 (very conservative)
+   - Try running 'make erase' first, then flash
+   - Check if esptool is installed: esptool.py version
+
+Common Mistakes to Avoid:
+- Not connecting GPIO0 to GND before powering up
+- Not crossing RX/TX connections
+- Loose or intermittent GPIO0-GND connection
+- Releasing RESET button too late
+- Bad or high-resistance jumper wires
+- Insufficient power supply

@@ -1,0 +1,72 @@
+ESP32-CAM to USB-TTL Adapter Connection Guide
+==========================================
+
+For Programming/Flashing Mode (HW-297):
+----------------------------
+ESP32-CAM HW-297    USB-TTL Adapter
+---------------    --------------
+3V3 or 5V       -> 3.3V
+GND             -> GND
+IO1 (U0T)       -> RX  (cross-connected)
+IO3 (U0R)       -> TX  (cross-connected)
+GPIO0           -> GND (only during flashing)
+
+Important Notes for HW-297:
+1. GPIO0 must be connected to GND BEFORE powering up to enter flash mode
+2. Board has built-in voltage regulator - can use either 3.3V or 5V power
+3. Cross-connect the serial lines:
+   - ESP32's IO1 (transmit) goes to USB-TTL's RX (receive)
+   - ESP32's IO3 (receive) goes to USB-TTL's TX (transmit)
+
+Flashing Process:
+1. Make all connections as shown above (including GPIO0 to GND)
+2. Plug in USB-TTL adapter to computer
+3. Press and hold the RST button on ESP32-CAM
+4. Release the RST button
+5. Run the flash command
+6. After successful flash:
+   - Unplug USB-TTL
+   - Remove GPIO0 to GND connection
+   - Reconnect power for normal operation
+
+Common Issues (HW-297):
+- If flashing fails, double-check:
+  * All connections are secure
+  * GPIO0 is properly grounded
+  * Power is connected (3.3V or 5V)
+  * IO1/IO3 are crossed properly with RX/TX
+  * Try pressing the onboard RESET button just before flash attempt
+  * Ensure Flash LED (GPIO4) is not connected during flashing
+  * Check if microSD card is properly seated (if used)
+
+Physical Pin Layout (ESP32-CAM HW-297):
+--------------------------------
+[Front Side - OV2640 Camera]
+                 ___________
+                |  OV2640   |
+                |  Camera   |
+                |  Module   |
+                |___________|
+                    ||||
+                    ||||
+               ______________
+              |   ESP32-CAM  |
+              |     HW-297   |
+[Left Side]   |              |   [Right Side]
+3V3    <----> |              | <----> 5V
+GND    <----> |              | <----> GPIO0 (Flash)
+IO12   <----> |              | <----> GND
+IO13   <----> |              | <----> IO16
+IO15   <----> |              | <----> IO14
+IO2    <----> |              | <----> IO3 (U0R -> USB-TTL TX)
+IO4    <----> |              | <----> IO1 (U0T -> USB-TTL RX)
+              |______________|
+[Bottom - SD Card Slot]
+
+[Note: HW-297 specific features:
+- OV2640 2MP camera module
+- microSD card slot on bottom
+- Built-in voltage regulator (can use 5V or 3.3V)
+- Flash LED on GPIO4
+- RESET button on board
+- Built-in antenna]

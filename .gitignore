@@ -1,0 +1,30 @@
+# Build directory
+build/
+
+# Python virtual environment
+venv/
+
+# Configuration files
+module/config.h
+
+# VSCode settings
+.vscode/
+
+# macOS system files
+.DS_Store
+
+# Arduino build files
+*.bin
+*.elf
+*.map
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+
+# Device configuration
+.device.env

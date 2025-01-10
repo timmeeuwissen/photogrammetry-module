@@ -1,0 +1,79 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "arduino.path": "/usr/local/bin",
+        "arduino.commandPath": "arduino-cli",
+        "arduino.useArduinoCli": true,
+        "arduino.logLevel": "verbose",
+        "arduino.enableUSBDetection": true,
+        "arduino.defaultBaudRate": 115200,
+        "arduino.defaultBoard": "esp32:esp32:esp32cam",
+        "arduino.sketchbook.path": "${workspaceFolder}",
+        "arduino.additionalUrls": [
+            "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
+        ],
+        "files.associations": {
+            "*.ino": "cpp",
+            "*.h": "cpp"
+        },
+        "files.exclude": {
+            "**/.git": true,
+            "**/.DS_Store": true,
+            "build/": true,
+            "**/*.pyc": true
+        },
+        "files.watcherExclude": {
+            "**/build/**": true,
+            "**/venv/**": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "vsciot-vscode.vscode-arduino",
+            "ms-vscode.cpptools"
+        ]
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Arduino",
+                "type": "arduino",
+                "request": "launch",
+                "program": "${workspaceFolder}/module/module.ino",
+                "cwd": "${workspaceFolder}",
+                "MIMode": "gdb",
+                "targetArchitecture": "arm",
+                "miDebuggerPath": "",
+                "debugServerPath": "",
+                "debugServerArgs": "",
+                "customLaunchSetupCommands": [
+                    {
+                        "text": "target remote localhost:3333"
+                    },
+                    {
+                        "text": "file \"${file}\""
+                    },
+                    {
+                        "text": "load"
+                    },
+                    {
+                        "text": "monitor reset halt"
+                    },
+                    {
+                        "text": "monitor reset init"
+                    }
+                ],
+                "stopAtEntry": true,
+                "serverStarted": "Info\\ :\\ [\\w\\d\\.]*:\\ hardware",
+                "launchCompleteCommand": "exec-continue",
+                "filterStderr": true,
+                "args": []
+            }
+        ]
+    }
+}
