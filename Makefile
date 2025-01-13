@@ -212,7 +212,10 @@ flash-controller: check-device ensure-port reset-port
 			echo "\n$(YELLOW)Attempting upload...$(RESET)"; \
 			$(ESPTOOL) --port $$DEVICE --chip esp32c3 --baud $(UPLOAD_SPEED) \
 				write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect \
-				0x0 build/controller.ino.bin || \
+				0x0000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/sdk/esp32c3/bin/bootloader_dio_40m.bin \
+				0x8000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/partitions/boot_app0.bin \
+				0xe000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/partitions/default_8MB.bin \
+				0x10000 build/controller.ino.bin || \
 			{ echo "\n$(RED)Upload failed. Troubleshooting steps:$(RESET)"; \
 			  echo "$(YELLOW)1. Try pressing the BOOT button while uploading$(RESET)"; \
 			  echo "$(YELLOW)2. Check physical connections$(RESET)"; \
