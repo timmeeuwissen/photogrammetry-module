@@ -1,17 +1,22 @@
-# Build directory
+# Build directories
 build/
+**/build/
 
 # Python virtual environment
 venv/
+__pycache__/
+*.pyc
 
 # Configuration files
-module/config.h
+camera/config.h
+controller/config.h
 
 # VSCode settings
 .vscode/
 
 # macOS system files
 .DS_Store
+**/.DS_Store
 
 # Arduino build files
 *.bin
@@ -28,3 +33,10 @@ module/config.h
 
 # Device configuration
 .device.env
+
+# Output directories
+uploads/
+output/
+
+# Status files
+.scan_status

@@ -55,7 +55,7 @@ def abort_scan():
 def check_status():
     return jsonify({"status": get_scan_status()}), 200
 
-@app.route('/api/upload/complete', methods=['GET'])
+@app.route('/api/complete', methods=['GET'])
 def process_photogrammetry():
     print("Photogrammetry process started.")
     # Call photogrammetry tool (replace with your tool's command)
