@@ -239,13 +239,35 @@ clean-flash: check-device ensure-port reset-port
 # Monitor targets
 monitor-camera: check-device ensure-port
 	@echo "$(CYAN)Starting camera monitor...$(RESET)"
-	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED)
+	@if [ -f .device.env ]; then \
+		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
+		if [ -e "$$DEVICE" ]; then \
+			echo "$(CYAN)Monitoring device: $$DEVICE$(RESET)"; \
+			$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED); \
+		else \
+			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)Error: .device.env file not found$(RESET)"; \
+		exit 1; \
+	fi
 
 monitor-controller: check-device ensure-port
 	@echo "$(CYAN)Starting controller monitor...$(RESET)"
-	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED)
+	@if [ -f .device.env ]; then \
+		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
+		if [ -e "$$DEVICE" ]; then \
+			echo "$(CYAN)Monitoring device: $$DEVICE$(RESET)"; \
+			screen $$DEVICE $(UPLOAD_SPEED); \
+		else \
+			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)Error: .device.env file not found$(RESET)"; \
+		exit 1; \
+	fi
 
 # Test targets
 test-camera: check-device ensure-port

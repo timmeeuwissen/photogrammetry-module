@@ -1,4 +1,4 @@
-eimport os
+import os
 from typing import Optional
 import requests
 from board_manager import BoardManager
