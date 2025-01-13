@@ -128,11 +128,21 @@ config:
 # Build targets
 build-camera: config
 	@echo "$(CYAN)Building camera firmware...$(RESET)"
-	$(ARDUINO_CLI) compile --fqbn $(CAMERA_BOARD) camera/camera.ino --verbose
+	@mkdir -p build
+	$(ARDUINO_CLI) compile --fqbn $(CAMERA_BOARD) --output-dir build camera/camera.ino --verbose
+	@if [ ! -f build/camera.ino.bin ]; then \
+		echo "$(RED)Build failed: Output files not created$(RESET)"; \
+		exit 1; \
+	fi
 
 build-controller: config
 	@echo "$(CYAN)Building controller firmware...$(RESET)"
-	$(ARDUINO_CLI) compile --fqbn $(CONTROLLER_BOARD) controller/controller.ino --verbose
+	@mkdir -p build
+	$(ARDUINO_CLI) compile --fqbn $(CONTROLLER_BOARD) --output-dir build controller/controller.ino --verbose
+	@if [ ! -f build/controller.ino.bin ]; then \
+		echo "$(RED)Build failed: Output files not created$(RESET)"; \
+		exit 1; \
+	fi
 
 build: build-camera build-controller
 
@@ -169,12 +179,7 @@ flash-camera: check-device ensure-port reset-port
 			echo "\n$(CYAN)Checking build files:$(RESET)"; \
 			ls -l build/*.bin 2>/dev/null || echo "$(RED)No build files found - run make build-camera first$(RESET)"; \
 			echo "\n$(YELLOW)Attempting upload...$(RESET)"; \
-			PYTHONPATH=/Users/timmeeuwissen/Library/Arduino15/packages/esp32/tools/esptool_py/4.9.dev3 \
-			$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(UPLOAD_SPEED) \
-				write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect \
-				0x1000 build/camera.ino.bootloader.bin \
-				0x8000 build/camera.ino.partitions.bin \
-				0x10000 build/camera.ino.bin || \
+			$(ARDUINO_CLI) upload -p $$DEVICE --fqbn $(CAMERA_BOARD) camera/camera.ino || \
 			{ echo "\n$(RED)Upload failed. Troubleshooting steps:$(RESET)"; \
 			  echo "$(YELLOW)1. Try pressing the BOOT button while uploading$(RESET)"; \
 			  echo "$(YELLOW)2. Check physical connections$(RESET)"; \
