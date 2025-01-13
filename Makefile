@@ -75,10 +75,13 @@ venv:
 	python3 -m venv venv
 
 server-deps: venv
-	. venv/bin/activate && python3 -m pip install flask
+	. venv/bin/activate && python3 -m pip install flask requests
 
 start: venv
-	. venv/bin/activate && python3 server/server.py
+	. venv/bin/activate && python3 server/app.py
+
+cli: venv
+	@. venv/bin/activate && python3 server/cli.py
 
 esp32-deps:
 	@if ! $(ARDUINO_CLI) config dump > /dev/null 2>&1; then \
@@ -281,6 +284,7 @@ help:
 	@echo "  stop         - Stop the server"
 	@echo "  scan         - Start a new scan"
 	@echo "  abort        - Abort current scan"
+	@echo "  cli          - Launch interactive control menu"
 	@echo
 	@echo "Setup:"
 	@echo "  install      - Install all dependencies"
