@@ -1,18 +1,23 @@
 #include "config.h"
 #include <WiFi.h>
 #include "esp_camera.h"
-#include <HTTPClient.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // WiFi Credentials from config.h
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-// API Endpoint from config.h
-const char* api_url = API_URL;
+// Server Configuration
+const char* server_url = API_URL;
+String auth_token;
+bool is_registered = false;
+unsigned long last_heartbeat = 0;
+const unsigned long HEARTBEAT_INTERVAL = 10000;  // 10 seconds
 
-// Create web server on port 8889
-WebServer server(8889);
+// Create web server
+WebServer server(80);
 
 void setup() {
   Serial.begin(115200);
@@ -87,16 +92,30 @@ void setup() {
   }
 
   Serial.println("WiFi connected");
-  Serial.print("Camera IP: ");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // Set up web server endpoints
-  server.on("/api/capture", HTTP_GET, handleCapture);
+  // Set up server endpoints
+  server.on("/capture", HTTP_POST, handleCapture);
+  server.on("/abort", HTTP_POST, handleAbort);
+  
   server.begin();
   Serial.println("HTTP server started");
+
+  // Register with main server
+  registerWithServer();
 }
 
 void loop() {
+  server.handleClient();
+
+  // Handle heartbeat
+  if (is_registered && millis() - last_heartbeat > HEARTBEAT_INTERVAL) {
+    sendHeartbeat();
+    last_heartbeat = millis();
+  }
+
+  // If WiFi disconnects, try to reconnect
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi disconnected. Reconnecting...");
     WiFi.disconnect(true);
@@ -105,24 +124,92 @@ void loop() {
     delay(5000);
     return;
   }
+}
 
-  server.handleClient();
-  delay(10);
+void registerWithServer() {
+  HTTPClient http;
+  http.begin(String(server_url) + "/register");
+  http.addHeader("Content-Type", "application/json");
+
+  String ip = WiFi.localIP().toString();
+  String payload = "{\"type\":\"camera\",\"ip\":\"" + ip + "\"}";
+  
+  int httpCode = http.POST(payload);
+  
+  if (httpCode == 200) {
+    String response = http.getString();
+    StaticJsonDocument<200> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (!error) {
+      auth_token = doc["token"].as<String>();
+      is_registered = true;
+      Serial.println("Registered with server successfully");
+    }
+  } else {
+    Serial.printf("Registration failed: %d\n", httpCode);
+    delay(2000);
+    ESP.restart();
+  }
+  
+  http.end();
+}
+
+void sendHeartbeat() {
+  if (!is_registered) return;
+
+  HTTPClient http;
+  http.begin(String(server_url) + "/heartbeat");
+  http.addHeader("Authorization", "Bearer " + auth_token);
+  
+  int httpCode = http.POST("");
+  
+  if (httpCode != 200) {
+    Serial.printf("Heartbeat failed: %d\n", httpCode);
+    is_registered = false;
+    registerWithServer();
+  }
+  
+  http.end();
 }
 
 void handleCapture() {
-  String photoNumber = server.arg("number");
-  if (photoNumber == "") {
-    server.send(400, "text/plain", "Missing photo number");
+  if (!server.hasHeader("Authorization") || 
+      "Bearer " + auth_token != server.header("Authorization")) {
+    server.send(401, "text/plain", "Unauthorized");
     return;
   }
 
-  if (!captureAndSendPhoto(photoNumber.toInt())) {
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "Missing body");
+    return;
+  }
+
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  
+  if (error) {
+    server.send(400, "text/plain", "Invalid JSON");
+    return;
+  }
+
+  int step = doc["step"] | 0;
+  
+  if (captureAndSendPhoto(step)) {
+    server.send(200, "text/plain", "OK");
+  } else {
     server.send(500, "text/plain", "Failed to capture/send photo");
+  }
+}
+
+void handleAbort() {
+  if (!server.hasHeader("Authorization") || 
+      "Bearer " + auth_token != server.header("Authorization")) {
+    server.send(401, "text/plain", "Unauthorized");
     return;
   }
 
-  server.send(200, "text/plain", "Photo captured and sent");
+  server.send(200, "text/plain", "OK");
 }
 
 bool captureAndSendPhoto(int photo_number) {
@@ -142,7 +229,8 @@ bool captureAndSendPhoto(int photo_number) {
   }
 
   HTTPClient http;
-  http.begin(api_url);
+  http.begin(String(server_url) + "/upload");
+  http.addHeader("Authorization", "Bearer " + auth_token);
   http.addHeader("Content-Type", "multipart/form-data");
 
   String boundary = "ESP32PhotoBoundary";
@@ -173,6 +261,16 @@ bool captureAndSendPhoto(int photo_number) {
   if (!success) {
     Serial.println("Failed to send photo data");
     return false;
+  }
+
+  // Notify capture complete
+  if (httpResponseCode > 0) {
+    http.begin(String(server_url) + "/capture_complete");
+    http.addHeader("Authorization", "Bearer " + auth_token);
+    http.addHeader("Content-Type", "application/json");
+    String payload = "{\"step\":" + String(photo_number) + "}";
+    http.POST(payload);
+    http.end();
   }
 
   return httpResponseCode > 0;
