@@ -25,6 +25,7 @@
 #define LCD_COLS 16
 #define LCD_ROWS 2
 
+
 // WiFi Credentials from config.h
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
@@ -45,12 +46,56 @@ WebServer server(80);
 // Stepper state
 bool is_scanning = false;
 int current_step = 0;
-const int STEPS_PER_ROTATION = 60;  // 60 steps for 360 degrees (6 degrees per step)
+const int STEPS_PER_ROTATION = 512;  // 512 steps for 360 degrees
 int current_angle = 0;  // Track current angle in degrees
 
-// Convert angle to steps
+// actually rotates the stepper motor
+void rotateStepper(bool clockwise = true) {
+  // Half-step sequence for more precise control
+  const int numSteps = 8;
+  const int stepSequence[8][4] = {
+    {1,0,0,0},
+    {1,1,0,0},
+    {0,1,0,0},
+    {0,1,1,0},
+    {0,0,1,0},
+    {0,0,1,1},
+    {0,0,0,1},
+    {1,0,0,1}
+  };
+
+  if (clockwise) {
+    for (int step = 0; step < numSteps; step++) {
+      digitalWrite(IN1_PIN, stepSequence[step][0]);
+      digitalWrite(IN2_PIN, stepSequence[step][1]);
+      digitalWrite(IN3_PIN, stepSequence[step][2]);
+      digitalWrite(IN4_PIN, stepSequence[step][3]);
+      delay(1);  // Minimal delay for maximum speed while maintaining reliability
+    }
+  } else {
+    for (int step = numSteps - 1; step >= 0; step--) {
+      digitalWrite(IN1_PIN, stepSequence[step][0]);
+      digitalWrite(IN2_PIN, stepSequence[step][1]);
+      digitalWrite(IN3_PIN, stepSequence[step][2]);
+      digitalWrite(IN4_PIN, stepSequence[step][3]);
+      delay(1);  // Minimal delay for maximum speed while maintaining reliability
+    }
+  }
+  
+  // Set all pins low to reduce power consumption and heat
+  digitalWrite(IN1_PIN, LOW);
+  digitalWrite(IN2_PIN, LOW);
+  digitalWrite(IN3_PIN, LOW);
+  digitalWrite(IN4_PIN, LOW);
+}
+
+// Convert angle to steps with improved precision
 int angleToSteps(int angle) {
-  return (angle * STEPS_PER_ROTATION) / 360;
+  // Use floating point for more accurate calculation
+  // 4096 steps = 360 degrees
+  // Therefore, steps = (angle * 4096) / 360
+  float stepsPerDegree = STEPS_PER_ROTATION / 360.0;
+  return (int)(angle * stepsPerDegree);
 }
 
 // Move stepper to absolute or relative position
@@ -71,10 +116,17 @@ void moveToPosition(int target_angle, bool is_relative) {
   int steps = angleToSteps(abs(diff));
   bool clockwise = diff > 0;
   
-  // Move the motor
+  // Move the motor with acceleration
+  int delayTime;
   for (int i = 0; i < steps; i++) {
+    // Start slow, speed up in the middle, slow down at the end
+    if (i < steps/4 || i >= (steps*3)/4) {
+      delayTime = 2;  // Slower at start/end
+    } else {
+      delayTime = 1;  // Faster in the middle
+    }
     rotateStepper(clockwise);
-    delay(10);
+    delay(delayTime);
   }
   
   current_angle = target;
@@ -101,8 +153,8 @@ void setup() {
   digitalWrite(IN3_PIN, LOW);
   digitalWrite(IN4_PIN, LOW);
 
-  Serial.println("Changing the I2C pins");
-  Wire.begin(SDA_PIN, SCL_PIN);
+  Serial.println("Setting up the I2C pins");
+  Wire.begin();
 
   Serial.println("Setting up the LCD module");
   lcd.init();
@@ -181,18 +233,26 @@ void loop() {
   }
 
   // Handle scanning process
-  if (is_scanning && current_step < STEPS_PER_ROTATION) {
-    rotateStepper(true);  // Always rotate clockwise during scan
+  if (is_scanning) {
+    // Calculate angle for this step (6 degrees per step)
+    int target_angle = (current_step * 6) % 360;
+    
+    // Move to position
+    moveToPosition(target_angle, false);
     delay(500); // Let the system stabilize
+    
     // Notify server of rotation completion
     notifyRotationComplete();
     
     current_step++;
     delay(500);
-  } else if (is_scanning && current_step >= STEPS_PER_ROTATION) {
-    is_scanning = false;
-    current_step = 0;
-    notifyScanComplete();
+    
+    // Check if scan is complete (60 steps * 6 degrees = 360 degrees)
+    if (current_step >= 60) {
+      is_scanning = false;
+      current_step = 0;
+      notifyScanComplete();
+    }
   }
 }
 
@@ -370,44 +430,6 @@ void handleAbort() {
   server.send(200, "text/plain", "OK");
 }
 
-void rotateStepper(bool clockwise = true) {
-  // Stepper sequence for smoother rotation
-  const int numSteps = 8;
-  const int stepSequence[8][4] = {
-    {1,0,0,0},
-    {1,1,0,0},
-    {0,1,0,0},
-    {0,1,1,0},
-    {0,0,1,0},
-    {0,0,1,1},
-    {0,0,0,1},
-    {1,0,0,1}
-  };
-
-  if (clockwise) {
-    for (int step = 0; step < numSteps; step++) {
-      digitalWrite(IN1_PIN, stepSequence[step][0]);
-      digitalWrite(IN2_PIN, stepSequence[step][1]);
-      digitalWrite(IN3_PIN, stepSequence[step][2]);
-      digitalWrite(IN4_PIN, stepSequence[step][3]);
-      delay(10);
-    }
-  } else {
-    for (int step = numSteps - 1; step >= 0; step--) {
-      digitalWrite(IN1_PIN, stepSequence[step][0]);
-      digitalWrite(IN2_PIN, stepSequence[step][1]);
-      digitalWrite(IN3_PIN, stepSequence[step][2]);
-      digitalWrite(IN4_PIN, stepSequence[step][3]);
-      delay(10);
-    }
-  }
-  
-  // Set all pins low to reduce power consumption and heat
-  digitalWrite(IN1_PIN, LOW);
-  digitalWrite(IN2_PIN, LOW);
-  digitalWrite(IN3_PIN, LOW);
-  digitalWrite(IN4_PIN, LOW);
-}
 
 void notifyRotationComplete() {
   HTTPClient http;
