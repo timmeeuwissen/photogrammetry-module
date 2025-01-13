@@ -93,11 +93,8 @@ esp32-deps:
 	$(ARDUINO_CLI) config add board_manager.additional_urls $(ESP32_URL)
 	$(ARDUINO_CLI) core update-index
 	$(ARDUINO_CLI) core install esp32:esp32
-	$(ARDUINO_CLI) lib install "WiFi"
-	$(ARDUINO_CLI) lib install "HTTPClient"
 	$(ARDUINO_CLI) lib install "LiquidCrystal I2C"
-	$(ARDUINO_CLI) lib install "WebServer"
-	# esp32-camera is included in the ESP32 board package
+	# WiFi, HTTPClient, WebServer, and esp32-camera are included in the ESP32 board package
 
 config:
 	@if [ ! -f camera/config.h ]; then \
