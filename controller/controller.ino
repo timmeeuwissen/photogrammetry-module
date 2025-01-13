@@ -2,6 +2,8 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include <LiquidCrystal_I2C.h>
 
 // WiFi Credentials from config.h
