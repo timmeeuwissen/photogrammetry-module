@@ -15,6 +15,7 @@ class PhotogrammetryCLI:
             "4": ("Monitor Progress", self.monitor_progress),
             "5": ("Update LCD Display", self.update_lcd),
             "6": ("Take Single Photo", self.capture_single),
+            "7": ("Control Motor", self.control_motor),
             "q": ("Quit", self.quit_program)
         }
 
@@ -198,6 +199,62 @@ class PhotogrammetryCLI:
             print(f"Error taking photo: {result['error']}")
         else:
             print("Photo captured successfully")
+
+    def control_motor(self):
+        print("\nMotor Control")
+        print("=" * 25)
+        print("Enter angle (0-359) or +/- for relative movement")
+        
+        # Check controller status first
+        status = self.check_status()
+        if "error" in status:
+            return
+        if status["controller"] != "connected":
+            print("Error: Controller not connected")
+            return
+            
+        # Get angle input
+        angle_input = input("Angle: ").strip()
+        if not angle_input:
+            print("Operation cancelled")
+            return
+            
+        # Parse angle input
+        try:
+            if angle_input.startswith(('+', '-')):
+                angle = int(angle_input)
+                is_relative = True
+            else:
+                angle = int(angle_input)
+                is_relative = False
+                
+            # Validate angle
+            if (not is_relative and (angle < 0 or angle >= 360)) or \
+               (is_relative and (angle < -360 or angle > 360)):
+                print("Error: Invalid angle. Must be 0-359 for absolute or -360 to +360 for relative")
+                return
+                
+            # Confirm action
+            direction = "relative" if is_relative else "absolute"
+            confirm = input(f"\nMove motor to {angle}° ({direction}). Proceed? [y/N] ").lower()
+            if confirm != 'y':
+                print("Operation cancelled")
+                return
+                
+            # Send motor control command
+            result = self.make_request("POST", "motor", {
+                "angle": angle,
+                "relative": is_relative
+            })
+            
+            if "error" in result:
+                print(f"Error controlling motor: {result['error']}")
+            else:
+                print(f"Motor moved to {result.get('angle', angle)}°")
+                
+        except ValueError:
+            print("Error: Invalid angle format")
+            return
 
     def quit_program(self):
         print("\nGoodbye!")

@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import requests
 from board_manager import BoardManager
 from scan_manager import ScanManager
 
@@ -139,6 +140,43 @@ def capture_single():
         return jsonify({"message": "Photo captured successfully"})
     except Exception as e:
         return jsonify({"error": f"Camera error: {str(e)}"}), 500
+
+@app.route('/api/motor', methods=['POST'])
+def control_motor():
+    # Check if controller is connected
+    if not board_manager.controller_board or not board_manager.controller_board.is_alive():
+        return jsonify({"error": "Controller not connected"}), 503
+
+    # Get angle from request
+    data = request.get_json()
+    if not data or 'angle' not in data:
+        return jsonify({"error": "Missing angle parameter"}), 400
+
+    angle = data['angle']
+    is_relative = data.get('relative', False)
+
+    # Validate angle
+    if not isinstance(angle, (int, float)):
+        return jsonify({"error": "Angle must be a number"}), 400
+
+    if (not is_relative and (angle < 0 or angle >= 360)) or \
+       (is_relative and (angle < -360 or angle > 360)):
+        return jsonify({"error": "Invalid angle"}), 400
+
+    try:
+        # Send motor control command to controller
+        response = requests.post(
+            f"http://{board_manager.controller_board.ip_address}/motor",
+            json={"angle": angle, "relative": is_relative},
+            headers={"Authorization": f"Bearer {board_manager.controller_board.token}"},
+            timeout=5
+        )
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to control motor"}), 500
+            
+        return response.json()  # Return the new angle from controller
+    except Exception as e:
+        return jsonify({"error": f"Controller error: {str(e)}"}), 500
 
 @app.route('/api/upload', methods=['POST'])
 def upload_image():

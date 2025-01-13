@@ -5,7 +5,6 @@
 #include <ArduinoJson.h>
 #include <LiquidCrystal_I2C.h>
 
-
 // WiFi Configuration
 #define WIFI_SSID "meeuw-iot"
 #define WIFI_PASSWORD "avZD7rafc7hQ"
@@ -46,7 +45,40 @@ WebServer server(80);
 // Stepper state
 bool is_scanning = false;
 int current_step = 0;
-const int STEPS_PER_ROTATION = 60;
+const int STEPS_PER_ROTATION = 60;  // 60 steps for 360 degrees (6 degrees per step)
+int current_angle = 0;  // Track current angle in degrees
+
+// Convert angle to steps
+int angleToSteps(int angle) {
+  return (angle * STEPS_PER_ROTATION) / 360;
+}
+
+// Move stepper to absolute or relative position
+void moveToPosition(int target_angle, bool is_relative) {
+  int target;
+  if (is_relative) {
+    target = (current_angle + target_angle + 360) % 360;  // Handle negative angles
+  } else {
+    target = target_angle % 360;  // Normalize to 0-359
+  }
+  
+  // Calculate shortest path
+  int diff = target - current_angle;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  
+  // Convert angle difference to steps
+  int steps = angleToSteps(abs(diff));
+  bool clockwise = diff > 0;
+  
+  // Move the motor
+  for (int i = 0; i < steps; i++) {
+    rotateStepper(clockwise);
+    delay(10);
+  }
+  
+  current_angle = target;
+}
 
 void setup() {
   delay(2000);  // Give USB CDC time to initialize
@@ -80,7 +112,6 @@ void setup() {
   lcd.setCursor(1, 0);
   lcd.print("Controller..");
 
-
   Serial.println("Basic setup complete");
   delay(1000);
   
@@ -90,7 +121,6 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.println("WiFi Connecting");
-
 
   int wifi_retry = 0;
   while (WiFi.status() != WL_CONNECTED && wifi_retry < 20) {
@@ -115,6 +145,7 @@ void setup() {
   server.on("/lcd", HTTP_POST, handleLcdUpdate);
   server.on("/start_rotation", HTTP_POST, handleStartRotation);
   server.on("/abort", HTTP_POST, handleAbort);
+  server.on("/motor", HTTP_POST, handleMotorControl);
   
   server.begin();
   Serial.println("HTTP server started");
@@ -131,7 +162,6 @@ void loop() {
   if (millis() - lastPrint >= 5000) {  // Print every 5 seconds
     Serial.print("Beat: IP address: ");
     Serial.println(WiFi.localIP());
-
     lastPrint = millis();
   }
 
@@ -143,7 +173,6 @@ void loop() {
     last_heartbeat = millis();
   }
 
-
   // If WiFi disconnects, try to reconnect
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi disconnected. Reconnecting...");
@@ -153,7 +182,7 @@ void loop() {
 
   // Handle scanning process
   if (is_scanning && current_step < STEPS_PER_ROTATION) {
-    rotateStepper();
+    rotateStepper(true);  // Always rotate clockwise during scan
     delay(500); // Let the system stabilize
     // Notify server of rotation completion
     notifyRotationComplete();
@@ -165,6 +194,44 @@ void loop() {
     current_step = 0;
     notifyScanComplete();
   }
+}
+
+void handleMotorControl() {
+  if (!server.hasHeader("Authorization") || 
+      "Bearer " + auth_token != server.header("Authorization")) {
+    server.send(401, "text/plain", "Unauthorized");
+    return;
+  }
+
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "Missing body");
+    return;
+  }
+
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  
+  if (error) {
+    server.send(400, "text/plain", "Invalid JSON");
+    return;
+  }
+
+  if (!doc.containsKey("angle")) {
+    server.send(400, "text/plain", "Missing angle parameter");
+    return;
+  }
+
+  int angle = doc["angle"].as<int>();
+  bool is_relative = doc["relative"] | false;
+
+  if ((!is_relative && (angle < 0 || angle >= 360)) || 
+      (is_relative && (angle < -360 || angle > 360))) {
+    server.send(400, "text/plain", "Invalid angle");
+    return;
+  }
+
+  moveToPosition(angle, is_relative);
+  server.send(200, "application/json", "{\"angle\":" + String(current_angle) + "}");
 }
 
 void registerWithServer() {
@@ -303,7 +370,7 @@ void handleAbort() {
   server.send(200, "text/plain", "OK");
 }
 
-void rotateStepper() {
+void rotateStepper(bool clockwise = true) {
   // Stepper sequence for smoother rotation
   const int numSteps = 8;
   const int stepSequence[8][4] = {
@@ -317,12 +384,22 @@ void rotateStepper() {
     {1,0,0,1}
   };
 
-  for (int step = 0; step < numSteps; step++) {
-    digitalWrite(IN1_PIN, stepSequence[step][0]);
-    digitalWrite(IN2_PIN, stepSequence[step][1]);
-    digitalWrite(IN3_PIN, stepSequence[step][2]);
-    digitalWrite(IN4_PIN, stepSequence[step][3]);
-    delay(10);
+  if (clockwise) {
+    for (int step = 0; step < numSteps; step++) {
+      digitalWrite(IN1_PIN, stepSequence[step][0]);
+      digitalWrite(IN2_PIN, stepSequence[step][1]);
+      digitalWrite(IN3_PIN, stepSequence[step][2]);
+      digitalWrite(IN4_PIN, stepSequence[step][3]);
+      delay(10);
+    }
+  } else {
+    for (int step = numSteps - 1; step >= 0; step--) {
+      digitalWrite(IN1_PIN, stepSequence[step][0]);
+      digitalWrite(IN2_PIN, stepSequence[step][1]);
+      digitalWrite(IN3_PIN, stepSequence[step][2]);
+      digitalWrite(IN4_PIN, stepSequence[step][3]);
+      delay(10);
+    }
   }
   
   // Set all pins low to reduce power consumption and heat
