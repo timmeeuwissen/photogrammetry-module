@@ -1,4 +1,4 @@
-.PHONY: install start venv esp32-deps flash-esp32 server-deps erase reset config build scan
+.PHONY: install start venv esp32-deps flash-esp32 server-deps erase reset config build scan cli monitor-camera monitor-controller test-camera test-controller test-system clean-flash clean stop abort
 
 # Board Settings
 CAMERA_BOARD ?= esp32:esp32:esp32cam
@@ -73,6 +73,9 @@ check-device:
 
 venv:
 	python3 -m venv venv
+
+install: server-deps esp32-deps
+	@echo "All dependencies installed successfully"
 
 server-deps: venv
 	. venv/bin/activate && python3 -m pip install flask requests
