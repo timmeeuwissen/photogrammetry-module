@@ -109,6 +109,7 @@ esp32-deps:
 	$(ARDUINO_CLI) core update-index
 	$(ARDUINO_CLI) core install esp32:esp32
 	$(ARDUINO_CLI) lib install "LiquidCrystal I2C"
+	$(ARDUINO_CLI) lib install "ArduinoJson"
 	@echo "$(GREEN)ESP32 dependencies installed successfully$(RESET)"
 	# WiFi, HTTPClient, WebServer, and esp32-camera are included in the ESP32 board package
 
