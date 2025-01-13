@@ -249,14 +249,11 @@ void handleCapture() {
   }
   Serial.printf("Photo captured successfully. Size: %u bytes\n", fb->len);
 
-  // Send response headers
+  // Send photo data in response
   server.sendHeader("Content-Type", "image/jpeg");
   server.sendHeader("Content-Disposition", "attachment; filename=photo_" + String(step) + ".jpg");
   server.sendHeader("Connection", "close");
-  server.send(200, "image/jpeg", "");  // Send headers only
-  
-  // Send photo data
-  server.sendContent((const char*)fb->buf, fb->len);
+  server.send_P(200, "image/jpeg", (const char *)fb->buf, fb->len);
   
   esp_camera_fb_return(fb);
   Serial.println("Photo sent successfully");

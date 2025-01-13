@@ -68,11 +68,33 @@ def handle_rotation_complete():
     data = request.get_json()
     step = data.get('step', 0)
     
-    success, error = scan_manager.handle_rotation_complete(step)
-    if not success:
-        return jsonify({"error": error}), 500
-
-    return jsonify({"status": "ok"})
+    try:
+        response = requests.post(
+            f"http://{board_manager.camera_board.ip_address}/capture",
+            json={"step": step},
+            headers={"Authorization": f"Bearer {board_manager.camera_board.token}"},
+            timeout=5
+        )
+        if response.status_code != 200:
+            board_manager.update_lcd("Error", "Capture Failed")
+            return jsonify({"error": "Failed to trigger capture"}), 500
+            
+        # Log response details
+        print(f"Response headers: {response.headers}")
+        print(f"Response content length: {len(response.content)}")
+        print(f"Response content type: {response.headers.get('Content-Type')}")
+        
+        # Save the photo data
+        photo_data = response.content
+        if len(photo_data) == 0:
+            print("Error: Received empty photo data")
+            return jsonify({"error": "Received empty photo data"}), 500
+            
+        scan_manager.save_photo(f"photo_{step}.jpg", photo_data)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        board_manager.update_lcd("Error", "Capture Failed")
+        return jsonify({"error": f"Camera error: {str(e)}"}), 500
 
 @app.route('/api/scan_complete', methods=['POST'])
 def handle_scan_complete():
@@ -137,7 +159,19 @@ def capture_single():
         if response.status_code != 200:
             return jsonify({"error": "Failed to capture photo"}), 500
             
-        return jsonify({"message": "Photo captured successfully"})
+        # Log response details
+        print(f"Response headers: {response.headers}")
+        print(f"Response content length: {len(response.content)}")
+        print(f"Response content type: {response.headers.get('Content-Type')}")
+        
+        # Save the photo data
+        photo_data = response.content
+        if len(photo_data) == 0:
+            print("Error: Received empty photo data")
+            return jsonify({"error": "Received empty photo data"}), 500
+            
+        scan_manager.save_photo("photo_0.jpg", photo_data)
+        return jsonify({"message": "Photo captured and saved successfully"})
     except Exception as e:
         return jsonify({"error": f"Camera error: {str(e)}"}), 500
 

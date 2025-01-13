@@ -1,4 +1,5 @@
 import os
+import datetime
 from typing import Optional
 import requests
 from board_manager import BoardManager
@@ -97,6 +98,38 @@ class ScanManager:
         return True, result.get("errors", [])
 
     def save_photo(self, filename: str, file_data) -> None:
-        save_path = os.path.join(self.UPLOAD_FOLDER, filename)
-        file_data.save(save_path)
-        print(f"Image {filename} uploaded successfully.")
+        try:
+            # Extract step number if present in filename (e.g., "photo_5.jpg" -> "5")
+            step = "0"
+            if "_" in filename and "." in filename:
+                step = filename.split("_")[1].split(".")[0]
+            
+            # Create timestamped filename
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_filename = f"photo_{step}_{timestamp}.jpg"
+            
+            save_path = os.path.join(self.UPLOAD_FOLDER, new_filename)
+            print(f"Saving photo to: {os.path.abspath(save_path)}")
+            
+            # Ensure upload directory exists
+            os.makedirs(self.UPLOAD_FOLDER, exist_ok=True)
+            
+            # Handle both file object and raw data
+            if hasattr(file_data, 'save'):
+                print(f"Saving file object to {save_path}")
+                file_data.save(save_path)
+            else:
+                print(f"Writing {len(file_data)} bytes of raw data to {save_path}")
+                with open(save_path, 'wb') as f:
+                    f.write(file_data)
+            
+            # Verify file was saved
+            if os.path.exists(save_path):
+                size = os.path.getsize(save_path)
+                print(f"Successfully saved {new_filename} ({size} bytes)")
+            else:
+                raise IOError(f"File {save_path} was not created")
+                
+        except Exception as e:
+            print(f"Error saving photo: {str(e)}")
+            raise
