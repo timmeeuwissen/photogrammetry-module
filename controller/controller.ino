@@ -1,10 +1,30 @@
-#include "config.h"
 #include <WiFi.h>
 #include <Wire.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <LiquidCrystal_I2C.h>
+
+
+// WiFi Configuration
+#define WIFI_SSID "meeuw-iot"
+#define WIFI_PASSWORD "avZD7rafc7hQ"
+
+// Server Configuration
+#define API_URL "http://192.168.10.171:8888/api"
+
+// Stepper Motor Pins for ESP32-C3
+#define IN1_PIN 2   // GPIO2
+#define IN2_PIN 3   // GPIO3
+#define IN3_PIN 4   // GPIO4
+#define IN4_PIN 10  // GPIO10
+
+// LCD Configuration (I2C pins for ESP32-C3)
+#define SDA_PIN 5   // GPIO5
+#define SCL_PIN 6   // GPIO6
+#define I2C_ADDR 0x27  // Common address for PCF8574 I2C LCD adapter
+#define LCD_COLS 16
+#define LCD_ROWS 2
 
 // WiFi Credentials from config.h
 const char* ssid = WIFI_SSID;
@@ -49,23 +69,106 @@ void setup() {
   digitalWrite(IN3_PIN, LOW);
   digitalWrite(IN4_PIN, LOW);
 
+  Serial.println("Changing the I2C pins");
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  Serial.println("Setting up the LCD module");
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Initializing");
+  lcd.setCursor(1, 0);
+  lcd.print("Controller..");
+
+
   Serial.println("Basic setup complete");
   delay(1000);
   
+  // Initialize WiFi
+  Serial.println("Initializing WiFi");
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.println("WiFi Connecting");
+
+
+  int wifi_retry = 0;
+  while (WiFi.status() != WL_CONNECTED && wifi_retry < 20) {
+    delay(500);
+    Serial.print(".");
+    wifi_retry++;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi connection failed");
+    delay(1000);
+    ESP.restart();
+    return;
+  }
+
+  Serial.println("WiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Set up server endpoints
+  Serial.println("Setting up Server Endpoints");
+  server.on("/lcd", HTTP_POST, handleLcdUpdate);
+  server.on("/start_rotation", HTTP_POST, handleStartRotation);
+  server.on("/abort", HTTP_POST, handleAbort);
+  
+  server.begin();
+  Serial.println("HTTP server started");
+
+  // Register with main server
+  registerWithServer();
+
   Serial.println("Testing loop will start soon...");
   delay(1000);
 }
 
 void loop() {
   static unsigned long lastPrint = 0;
-  if (millis() - lastPrint >= 1000) {  // Print every second
-    Serial.println("Loop running...");
+  if (millis() - lastPrint >= 5000) {  // Print every 5 seconds
+    Serial.print("Beat: IP address: ");
+    Serial.println(WiFi.localIP());
+
     lastPrint = millis();
   }
-  delay(100);  // Small delay to prevent watchdog issues
+
+  server.handleClient();
+
+  // Handle heartbeat
+  if (is_registered && millis() - last_heartbeat > HEARTBEAT_INTERVAL) {
+    sendHeartbeat();
+    last_heartbeat = millis();
+  }
+
+
+  // If WiFi disconnects, try to reconnect
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected. Reconnecting...");
+    WiFi.disconnect(true);
+    return;
+  }
+
+  // Handle scanning process
+  if (is_scanning && current_step < STEPS_PER_ROTATION) {
+    rotateStepper();
+    delay(500); // Let the system stabilize
+    // Notify server of rotation completion
+    notifyRotationComplete();
+    
+    current_step++;
+    delay(500);
+  } else if (is_scanning && current_step >= STEPS_PER_ROTATION) {
+    is_scanning = false;
+    current_step = 0;
+    notifyScanComplete();
+  }
 }
 
 void registerWithServer() {
+  Serial.println("Registring with main server");
   HTTPClient http;
   http.begin(String(server_url) + "/register");
   http.addHeader("Content-Type", "application/json");
@@ -73,9 +176,12 @@ void registerWithServer() {
   String ip = WiFi.localIP().toString();
   String payload = "{\"type\":\"controller\",\"ip\":\"" + ip + "\"}";
   
+  Serial.println("Sending payload to server");
   int httpCode = http.POST(payload);
   
   if (httpCode == 200) {
+    Serial.println("Server was okay with registration request");
+
     String response = http.getString();
     StaticJsonDocument<200> doc;
     DeserializationError error = deserializeJson(doc, response);
@@ -89,9 +195,8 @@ void registerWithServer() {
     }
   } else {
     Serial.printf("Registration failed: %d\n", httpCode);
-    lcd.clear();
-    lcd.print("Reg Failed");
     delay(2000);
+    Serial.println("Restarting ESP, we need to start the registration over");
     ESP.restart();
   }
   
@@ -112,19 +217,25 @@ void sendHeartbeat() {
     is_registered = false;
     registerWithServer();
   }
+  else {
+    Serial.println("The heartbeat was sent");
+  }
   
   http.end();
 }
 
 void handleLcdUpdate() {
+  Serial.println("Been asked to send an LCD update");
   if (!server.hasHeader("Authorization") || 
       "Bearer " + auth_token != server.header("Authorization")) {
     server.send(401, "text/plain", "Unauthorized");
+    Serial.println("Unauthorized request of sending an LCD update");
     return;
   }
 
   if (!server.hasArg("plain")) {
     server.send(400, "text/plain", "Missing body");
+    Serial.println("Missing body");
     return;
   }
 
@@ -133,29 +244,32 @@ void handleLcdUpdate() {
   
   if (error) {
     server.send(400, "text/plain", "Invalid JSON");
+    Serial.println("Invalid JSON");
     return;
   }
 
   JsonArray lines = doc["lines"].as<JsonArray>();
-  if (lines.size() == 0 || lines.size() > 2) {
-    server.send(400, "text/plain", "Expected 1 or 2 lines");
+  if (lines.size() != 2) {
+    server.send(400, "text/plain", "Expected two lines");
+    Serial.println("Expected two lines");
     return;
   }
 
-  // Clear entire display first
-  lcd.clear();
-
   // Update first line
+  Serial.println("Updating line 1");
   String line1 = lines[0].as<String>();
+  lcd.setCursor(0, 0);
+  lcd.print("                "); // Clear line
   lcd.setCursor(0, 0);
   lcd.print(line1);
 
-  // Update second line if provided
-  if (lines.size() > 1) {
-    String line2 = lines[1].as<String>();
-    lcd.setCursor(0, 1);
-    lcd.print(line2);
-  }
+  // Update second line
+  Serial.println("Updating line 2");
+  String line2 = lines[1].as<String>();
+  lcd.setCursor(0, 1);
+  lcd.print("                "); // Clear line
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
 
   server.send(200, "text/plain", "OK");
 }

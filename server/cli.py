@@ -14,6 +14,7 @@ class PhotogrammetryCLI:
             "3": ("Abort Scan", self.abort_scan),
             "4": ("Monitor Progress", self.monitor_progress),
             "5": ("Update LCD Display", self.update_lcd),
+            "6": ("Take Single Photo", self.capture_single),
             "q": ("Quit", self.quit_program)
         }
 
@@ -175,6 +176,28 @@ class PhotogrammetryCLI:
             print(f"Line 1: {line1}")
             if line2:
                 print(f"Line 2: {line2}")
+
+    def capture_single(self):
+        # Check camera status first
+        status = self.check_status()
+        if "error" in status:
+            return
+        if status["camera"] != "connected":
+            print("Error: Camera not connected")
+            return
+
+        # Confirm action
+        confirm = input("\nReady to take a photo. Proceed? [y/N] ").lower()
+        if confirm != 'y':
+            print("Photo cancelled")
+            return
+
+        # Take photo
+        result = self.make_request("POST", "capture_single")
+        if "error" in result:
+            print(f"Error taking photo: {result['error']}")
+        else:
+            print("Photo captured successfully")
 
     def quit_program(self):
         print("\nGoodbye!")

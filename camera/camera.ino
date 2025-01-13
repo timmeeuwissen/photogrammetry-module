@@ -1,9 +1,39 @@
-#include "config.h"
 #include <WiFi.h>
 #include "esp_camera.h"
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+
+
+// WiFi Configuration
+#define WIFI_SSID "meeuw-iot"
+#define WIFI_PASSWORD "avZD7rafc7hQ"
+
+// Server Configuration
+#define API_URL "http://192.168.10.171:8888/api"
+
+// Camera pins for ESP32-CAM HW-297
+#define PWDN_GPIO_NUM     32
+#define RESET_GPIO_NUM    -1
+#define XCLK_GPIO_NUM      0
+#define SIOD_GPIO_NUM     26
+#define SIOC_GPIO_NUM     27
+#define Y9_GPIO_NUM       35
+#define Y8_GPIO_NUM       34
+#define Y7_GPIO_NUM       39
+#define Y6_GPIO_NUM       36
+#define Y5_GPIO_NUM       21
+#define Y4_GPIO_NUM       19
+#define Y3_GPIO_NUM       18
+#define Y2_GPIO_NUM        5
+#define VSYNC_GPIO_NUM    25
+#define HREF_GPIO_NUM     23
+#define PCLK_GPIO_NUM     22
+
+
+// Flash LED Pin (built into ESP32-CAM)
+#define FLASH_LED_PIN 4  // GPIO4 is the built-in flash LED
+
 
 // WiFi Credentials from config.h
 const char* ssid = WIFI_SSID;
@@ -20,7 +50,7 @@ const unsigned long HEARTBEAT_INTERVAL = 10000;  // 10 seconds
 WebServer server(80);
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   delay(1000);
   Serial.println("Camera setup started.");
 
@@ -127,6 +157,7 @@ void loop() {
 }
 
 void registerWithServer() {
+  Serial.println("Registring with main server");
   HTTPClient http;
   http.begin(String(server_url) + "/register");
   http.addHeader("Content-Type", "application/json");
@@ -134,9 +165,12 @@ void registerWithServer() {
   String ip = WiFi.localIP().toString();
   String payload = "{\"type\":\"camera\",\"ip\":\"" + ip + "\"}";
   
+  Serial.println("Sending payload to server");
   int httpCode = http.POST(payload);
   
   if (httpCode == 200) {
+    Serial.println("Server was okay with registration request");
+
     String response = http.getString();
     StaticJsonDocument<200> doc;
     DeserializationError error = deserializeJson(doc, response);
@@ -149,11 +183,13 @@ void registerWithServer() {
   } else {
     Serial.printf("Registration failed: %d\n", httpCode);
     delay(2000);
+    Serial.println("Restarting ESP, we need to start the registration over");
     ESP.restart();
   }
   
   http.end();
 }
+
 
 void sendHeartbeat() {
   if (!is_registered) return;

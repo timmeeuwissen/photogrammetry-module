@@ -15,7 +15,7 @@ def register_board():
     try:
         board = board_manager.register_board(data['type'], data['ip'])
         if data['type'] == 'controller':
-            board_manager.update_lcd("System Ready", None)
+            board_manager.update_lcd("System Ready")
         return jsonify({
             "token": board.token,
             "message": f"{data['type']} registered successfully"
@@ -118,6 +118,27 @@ def handle_lcd_update():
         return jsonify({"message": "LCD updated successfully"})
     else:
         return jsonify({"error": "Failed to update LCD"}), 500
+
+@app.route('/api/capture_single', methods=['POST'])
+def capture_single():
+    # Check if camera is connected
+    if not board_manager.camera_board or not board_manager.camera_board.is_alive():
+        return jsonify({"error": "Camera not connected"}), 503
+
+    try:
+        # Request capture from camera
+        response = requests.post(
+            f"http://{board_manager.camera_board.ip_address}/capture",
+            json={"step": 0},  # Use step 0 for single shots
+            headers={"Authorization": f"Bearer {board_manager.camera_board.token}"},
+            timeout=5
+        )
+        if response.status_code != 200:
+            return jsonify({"error": "Failed to capture photo"}), 500
+            
+        return jsonify({"message": "Photo captured successfully"})
+    except Exception as e:
+        return jsonify({"error": f"Camera error: {str(e)}"}), 500
 
 @app.route('/api/upload', methods=['POST'])
 def upload_image():
