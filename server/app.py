@@ -15,7 +15,7 @@ def register_board():
     try:
         board = board_manager.register_board(data['type'], data['ip'])
         if data['type'] == 'controller':
-            board_manager.update_lcd("System Ready")
+            board_manager.update_lcd("System Ready", None)
         return jsonify({
             "token": board.token,
             "message": f"{data['type']} registered successfully"
@@ -95,6 +95,29 @@ def abort_scan():
         }), 500
 
     return jsonify({"message": "Scan aborted successfully"})
+
+@app.route('/lcd', methods=['POST'])
+@app.route('/api/lcd', methods=['POST'])
+def handle_lcd_update():
+    data = request.get_json()
+    if not data or 'lines' not in data:
+        return jsonify({"error": "Missing lines array"}), 400
+        
+    lines = data['lines']
+    if not isinstance(lines, list) or len(lines) == 0 or len(lines) > 2:
+        return jsonify({"error": "Expected array of 1 or 2 lines"}), 400
+        
+    if not all(isinstance(line, str) for line in lines):
+        return jsonify({"error": "All lines must be strings"}), 400
+        
+    # Truncate lines to 16 characters if needed
+    lines = [line[:16] for line in lines]
+    
+    # Update LCD using board manager
+    if board_manager.update_lcd(lines[0], lines[1] if len(lines) > 1 else None):
+        return jsonify({"message": "LCD updated successfully"})
+    else:
+        return jsonify({"error": "Failed to update LCD"}), 500
 
 @app.route('/api/upload', methods=['POST'])
 def upload_image():

@@ -29,15 +29,10 @@ int current_step = 0;
 const int STEPS_PER_ROTATION = 60;
 
 void setup() {
-  // Enable USB CDC
-  USB.begin();
   delay(2000);  // Give USB CDC time to initialize
   
   // Start serial with default baud rate
-  Serial.begin(115200);
-  while (!Serial) {
-    ; // Wait for Serial to be ready
-  }
+  Serial.begin(9600);
   Serial.println();  // Print empty line in case of garbage
   Serial.println("Starting up...");
   delay(100);
@@ -142,24 +137,25 @@ void handleLcdUpdate() {
   }
 
   JsonArray lines = doc["lines"].as<JsonArray>();
-  if (lines.size() != 2) {
-    server.send(400, "text/plain", "Expected two lines");
+  if (lines.size() == 0 || lines.size() > 2) {
+    server.send(400, "text/plain", "Expected 1 or 2 lines");
     return;
   }
+
+  // Clear entire display first
+  lcd.clear();
 
   // Update first line
   String line1 = lines[0].as<String>();
   lcd.setCursor(0, 0);
-  lcd.print("                "); // Clear line
-  lcd.setCursor(0, 0);
   lcd.print(line1);
 
-  // Update second line
-  String line2 = lines[1].as<String>();
-  lcd.setCursor(0, 1);
-  lcd.print("                "); // Clear line
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
+  // Update second line if provided
+  if (lines.size() > 1) {
+    String line2 = lines[1].as<String>();
+    lcd.setCursor(0, 1);
+    lcd.print(line2);
+  }
 
   server.send(200, "text/plain", "OK");
 }

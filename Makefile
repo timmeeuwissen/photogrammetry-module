@@ -263,7 +263,7 @@ monitor-camera: check-device ensure-port
 		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
 		if [ -e "$$DEVICE" ]; then \
 			echo "$(CYAN)Monitoring device: $$DEVICE$(RESET)"; \
-			$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED); \
+			$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(CONNECT_SPEED); \
 		else \
 			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
 			exit 1; \

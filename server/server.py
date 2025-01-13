@@ -34,15 +34,15 @@ def generate_token() -> str:
 def is_board_alive(board: Board) -> bool:
     return time.time() - board.last_seen < 30  # Consider board dead after 30s
 
-def update_lcd(message: str, line: int = 0) -> bool:
+def forward_to_controller(lines: list) -> bool:
     if not controller_board or not is_board_alive(controller_board):
-        print(f"Controller not connected, can't update LCD: {message}")
+        print(f"Controller not connected, can't update LCD: {lines}")
         return False
     
     try:
         response = requests.post(
             f"http://{controller_board.ip_address}/lcd",
-            json={"message": message, "line": line},
+            json={"lines": lines},
             headers={"Authorization": f"Bearer {controller_board.token}"},
             timeout=5
         )
@@ -50,6 +50,34 @@ def update_lcd(message: str, line: int = 0) -> bool:
     except Exception as e:
         print(f"Failed to update LCD: {e}")
         return False
+
+def update_lcd(lines: list) -> bool:
+    # Ensure lines is a list and truncate if needed
+    if isinstance(lines, str):
+        lines = [lines]
+    lines = [str(line)[:16] for line in lines]
+    return forward_to_controller(lines)
+
+@app.route('/api/lcd', methods=['POST'])
+def handle_lcd_update():
+    data = request.get_json()
+    if not data or 'lines' not in data:
+        return jsonify({"error": "Missing lines array"}), 400
+        
+    lines = data['lines']
+    if not isinstance(lines, list) or len(lines) == 0 or len(lines) > 2:
+        return jsonify({"error": "Expected array of 1 or 2 lines"}), 400
+        
+    if not all(isinstance(line, str) for line in lines):
+        return jsonify({"error": "All lines must be strings"}), 400
+        
+    # Truncate lines to 16 characters if needed
+    lines = [line[:16] for line in lines]
+    
+    if update_lcd(lines):
+        return jsonify({"message": "LCD updated successfully"})
+    else:
+        return jsonify({"error": "Failed to update LCD"}), 500
 
 def get_scan_status():
     if not os.path.exists(SCAN_STATUS_FILE):
@@ -79,7 +107,7 @@ def register_board():
     elif board_type == 'controller':
         controller_board = new_board
         print(f"Controller board registered at {ip_address}")
-        update_lcd("System Ready")
+        update_lcd(["System Ready"])
     else:
         return jsonify({"error": "Invalid board type"}), 400
 
@@ -130,7 +158,7 @@ def start_scan():
         return jsonify({"error": "One or more boards not responding"}), 503
 
     set_scan_status("scanning")
-    update_lcd("Scan Starting...")
+    update_lcd(["Scan Starting..."])
     
     # Start the scanning process
     try:
@@ -141,11 +169,11 @@ def start_scan():
         )
         if response.status_code != 200:
             set_scan_status("idle")
-            update_lcd("Start Failed")
+            update_lcd(["Start Failed"])
             return jsonify({"error": "Failed to start controller"}), 500
     except Exception as e:
         set_scan_status("idle")
-        update_lcd("Start Failed")
+        update_lcd(["Start Failed"])
         return jsonify({"error": f"Controller error: {str(e)}"}), 500
 
     return jsonify({"message": "Scan started"})
@@ -158,7 +186,7 @@ def handle_capture_complete():
 
     data = request.get_json()
     step = data.get('step', 0)
-    update_lcd(f"Photo {step} OK", 1)
+    update_lcd(["Taking Photos", f"Photo {step} OK"])
     
     return jsonify({"status": "ok"})
 
@@ -179,10 +207,10 @@ def handle_rotation_complete():
             timeout=5
         )
         if response.status_code != 200:
-            update_lcd(f"Capture Failed", 1)
+            update_lcd(["Taking Photos", "Capture Failed"])
             return jsonify({"error": "Failed to trigger capture"}), 500
     except Exception as e:
-        update_lcd(f"Capture Failed", 1)
+        update_lcd(["Taking Photos", "Capture Failed"])
         return jsonify({"error": f"Camera error: {str(e)}"}), 500
 
     return jsonify({"status": "ok"})
@@ -194,13 +222,13 @@ def handle_scan_complete():
         return jsonify({"error": "Unauthorized"}), 401
 
     set_scan_status("idle")
-    update_lcd("Scan Complete")
+    update_lcd(["Scan Complete"])
     
     # Start photogrammetry processing
     print("Starting photogrammetry processing...")
     os.system(f"photogrammetry-tool --input {UPLOAD_FOLDER} --output {PHOTOGRAMMETRY_OUTPUT}")
     
-    update_lcd("Process Done", 1)
+    update_lcd(["Processing", "Complete"])
     return jsonify({"status": "ok"})
 
 @app.route('/api/abort', methods=['POST'])
@@ -232,7 +260,7 @@ def abort_scan():
             errors.append(f"Camera abort failed: {str(e)}")
 
     set_scan_status("idle")
-    update_lcd("Scan Aborted")
+    update_lcd(["Scan Aborted"])
 
     if errors:
         return jsonify({

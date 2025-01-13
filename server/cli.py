@@ -13,6 +13,7 @@ class PhotogrammetryCLI:
             "2": ("Start Scan", self.start_scan),
             "3": ("Abort Scan", self.abort_scan),
             "4": ("Monitor Progress", self.monitor_progress),
+            "5": ("Update LCD Display", self.update_lcd),
             "q": ("Quit", self.quit_program)
         }
 
@@ -32,8 +33,12 @@ class PhotogrammetryCLI:
             print("Error: Could not connect to server. Is it running?")
             return {"error": "Connection failed"}
         except requests.exceptions.HTTPError as e:
-            print(f"Error: Server returned {e.response.status_code}")
-            return {"error": e.response.json().get("error", str(e))}
+            print(f"Error: Server {url} returned {e.response.status_code}")
+            try:
+                error_data = e.response.json()
+                return {"error": error_data.get("error", str(e))}
+            except ValueError:  # Includes JSONDecodeError
+                return {"error": e.response.text if e.response.text else str(e)}
         except Exception as e:
             print(f"Error: {str(e)}")
             return {"error": str(e)}
@@ -117,6 +122,59 @@ class PhotogrammetryCLI:
                 time.sleep(1)
         except KeyboardInterrupt:
             print("\nStopped monitoring")
+
+    def update_lcd(self):
+        print("\nUpdate LCD Display")
+        print("=" * 25)
+        print("Enter text for display (press Enter without text to skip line 2):")
+        
+        # Get line 1 with validation
+        line1 = input("Line 1: ").strip()
+        if not line1:
+            print("Error: Line 1 cannot be empty")
+            return
+        if len(line1) > 16:  # LCD is 16 characters wide
+            print("Warning: Line 1 will be truncated (max 16 characters)")
+            line1 = line1[:16]
+            
+        # Get optional line 2
+        line2 = input("Line 2 (optional): ").strip()
+        if line2 and len(line2) > 16:
+            print("Warning: Line 2 will be truncated (max 16 characters)")
+            line2 = line2[:16]
+        
+        # Prepare lines array
+        lines = [line1]
+        if line2:
+            lines.append(line2)
+        
+        # Check controller status before attempting update
+        status = self.check_status()
+        if "error" in status:
+            print("Error: Could not verify controller status")
+            return
+        if status["controller"] != "connected":
+            print("Error: Controller is not connected")
+            return
+            
+        # Attempt to update LCD
+        result = self.make_request("POST", "lcd", {"lines": lines})
+        if "error" in result:
+            error_msg = result.get("error", "Unknown error")
+            if "Connection failed" in error_msg:
+                print("Error: Could not connect to server. Is it running?")
+            elif "401" in error_msg:
+                print("Error: Not authorized to update LCD")
+            elif "400" in error_msg:
+                print("Error: Invalid request format")
+            else:
+                print(f"Error updating LCD: {error_msg}")
+        else:
+            print("LCD updated successfully")
+            print(f"Displayed text:")
+            print(f"Line 1: {line1}")
+            if line2:
+                print(f"Line 2: {line2}")
 
     def quit_program(self):
         print("\nGoodbye!")
