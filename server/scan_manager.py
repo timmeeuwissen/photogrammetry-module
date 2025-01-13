@@ -1,4 +1,4 @@
-import os
+eimport os
 from typing import Optional
 import requests
 from board_manager import BoardManager
@@ -36,7 +36,7 @@ class ScanManager:
             return False, "One or more boards not responding"
 
         self.set_status("scanning")
-        self.board_manager.update_lcd("Scan Starting...")
+        self.board_manager.update_lcd("Scan Starting", "Please wait...")
         
         # Start the scanning process
         try:
@@ -57,7 +57,7 @@ class ScanManager:
         return True, None
 
     def handle_capture_complete(self, step: int) -> None:
-        self.board_manager.update_lcd(f"Photo {step} OK", 1)
+        self.board_manager.update_lcd("Scanning...", f"Photo {step} OK")
 
     def handle_rotation_complete(self, step: int) -> tuple[bool, Optional[str]]:
         try:
@@ -68,23 +68,23 @@ class ScanManager:
                 timeout=5
             )
             if response.status_code != 200:
-                self.board_manager.update_lcd(f"Capture Failed", 1)
+                self.board_manager.update_lcd("Error", "Capture Failed")
                 return False, "Failed to trigger capture"
         except Exception as e:
-            self.board_manager.update_lcd(f"Capture Failed", 1)
+            self.board_manager.update_lcd("Error", "Capture Failed")
             return False, f"Camera error: {str(e)}"
 
         return True, None
 
     def handle_scan_complete(self) -> None:
         self.set_status("idle")
-        self.board_manager.update_lcd("Scan Complete")
+        self.board_manager.update_lcd("Scan Complete", "Processing...")
         
         # Start photogrammetry processing
         print("Starting photogrammetry processing...")
         os.system(f"photogrammetry-tool --input {self.UPLOAD_FOLDER} --output {self.PHOTOGRAMMETRY_OUTPUT}")
         
-        self.board_manager.update_lcd("Process Done", 1)
+        self.board_manager.update_lcd("Scan Complete", "Process Done")
 
     def abort_scan(self) -> tuple[bool, list[str]]:
         if self.get_status() != "scanning":
@@ -92,7 +92,7 @@ class ScanManager:
 
         result = self.board_manager.send_abort()
         self.set_status("idle")
-        self.board_manager.update_lcd("Scan Aborted")
+        self.board_manager.update_lcd("Scan Aborted", "System Ready")
 
         return True, result.get("errors", [])
 

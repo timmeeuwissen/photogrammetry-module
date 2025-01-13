@@ -204,13 +204,25 @@ void handleLcdUpdate() {
     return;
   }
 
-  String message = doc["message"].as<String>();
-  int line = doc["line"] | 0;
+  JsonArray lines = doc["lines"].as<JsonArray>();
+  if (lines.size() != 2) {
+    server.send(400, "text/plain", "Expected two lines");
+    return;
+  }
 
-  lcd.setCursor(0, line);
+  // Update first line
+  String line1 = lines[0].as<String>();
+  lcd.setCursor(0, 0);
   lcd.print("                "); // Clear line
-  lcd.setCursor(0, line);
-  lcd.print(message);
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+
+  // Update second line
+  String line2 = lines[1].as<String>();
+  lcd.setCursor(0, 1);
+  lcd.print("                "); // Clear line
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
 
   server.send(200, "text/plain", "OK");
 }

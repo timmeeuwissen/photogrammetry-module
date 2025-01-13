@@ -44,15 +44,20 @@ class BoardManager:
             return self.controller_board
         return None
 
-    def update_lcd(self, message: str, line: int = 0) -> bool:
+    def update_lcd(self, line1: str = None, line2: str = None) -> bool:
         if not self.controller_board or not self.controller_board.is_alive():
-            print(f"Controller not connected, can't update LCD: {message}")
+            print(f"Controller not connected, can't update LCD: {line1} / {line2}")
             return False
         
         try:
             response = requests.post(
                 f"http://{self.controller_board.ip_address}/lcd",
-                json={"message": message, "line": line},
+                json={
+                    "lines": [
+                        line1 if line1 is not None else "",
+                        line2 if line2 is not None else ""
+                    ]
+                },
                 headers={"Authorization": f"Bearer {self.controller_board.token}"},
                 timeout=5
             )
