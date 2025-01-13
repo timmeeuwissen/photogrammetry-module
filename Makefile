@@ -232,7 +232,13 @@ flash-controller: check-device ensure-port reset-port
 clean-flash: check-device ensure-port reset-port
 	@echo "$(YELLOW)Erasing flash memory...$(RESET)"
 	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(UPLOAD_SPEED) erase_flash
+	if [ -f build/controller.ino.bin ]; then \
+		echo "$(CYAN)Detected controller firmware - using ESP32-C3 chip$(RESET)"; \
+		$(ESPTOOL) --port $$DEVICE --chip esp32c3 --baud $(UPLOAD_SPEED) erase_flash; \
+	else \
+		echo "$(CYAN)Using default ESP32 chip$(RESET)"; \
+		$(ESPTOOL) --port $$DEVICE --chip esp32 --baud $(UPLOAD_SPEED) erase_flash; \
+	fi
 	@echo "$(GREEN)Flash memory erased$(RESET)"
 	@sleep 2
 
