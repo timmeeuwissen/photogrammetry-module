@@ -195,9 +195,38 @@ flash-camera: check-device ensure-port reset-port
 		exit 1; \
 	fi
 
-flash-controller: check-device ensure-port
+flash-controller: check-device ensure-port reset-port
 	@echo "$(CYAN)Uploading controller firmware...$(RESET)"
-	$(ARDUINO_CLI) upload -p $(PORT) --fqbn $(CONTROLLER_BOARD) controller/controller.ino
+	@echo "$(BLUE)Using baud rate: $(CONNECT_SPEED)$(RESET)"
+	@if [ -f .device.env ]; then \
+		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
+		echo "$(CYAN)Device from .device.env: $$DEVICE$(RESET)"; \
+		if [ -e "$$DEVICE" ]; then \
+			echo "$(GREEN)Device exists and is accessible$(RESET)"; \
+			echo "$(CYAN)Device permissions:$(RESET)"; \
+			ls -l $$DEVICE; \
+			echo "$(CYAN)Current processes using device:$(RESET)"; \
+			lsof $$DEVICE 2>/dev/null || echo "$(GREEN)No processes using device$(RESET)"; \
+			echo "\n$(CYAN)Checking build files:$(RESET)"; \
+			ls -l build/*.bin 2>/dev/null || echo "$(RED)No build files found - run make build-controller first$(RESET)"; \
+			echo "\n$(YELLOW)Attempting upload...$(RESET)"; \
+			$(ESPTOOL) --port $$DEVICE --chip esp32c3 --baud $(UPLOAD_SPEED) \
+				write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect \
+				0x0 build/controller.ino.bin || \
+			{ echo "\n$(RED)Upload failed. Troubleshooting steps:$(RESET)"; \
+			  echo "$(YELLOW)1. Try pressing the BOOT button while uploading$(RESET)"; \
+			  echo "$(YELLOW)2. Check physical connections$(RESET)"; \
+			  echo "$(YELLOW)3. Try a different USB port$(RESET)"; \
+			  echo "$(YELLOW)4. Try a slower baud rate (current: $(UPLOAD_SPEED))$(RESET)"; \
+			  exit 1; }; \
+		else \
+			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)Error: .device.env file not found$(RESET)"; \
+		exit 1; \
+	fi
 
 # Clean flash and upload
 clean-flash: check-device ensure-port reset-port
