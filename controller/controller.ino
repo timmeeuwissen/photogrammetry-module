@@ -29,23 +29,20 @@ int current_step = 0;
 const int STEPS_PER_ROTATION = 60;
 
 void setup() {
+  // Enable USB CDC
+  USB.begin();
+  delay(2000);  // Give USB CDC time to initialize
+  
+  // Start serial with default baud rate
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("Controller setup started.");
-
-  // Initialize I2C and LCD
-  Wire.begin(SDA_PIN, SCL_PIN);
-  delay(500);
-
-  Serial.println("Initializing LCD screen.");
-  lcd.init();
+  while (!Serial) {
+    ; // Wait for Serial to be ready
+  }
+  Serial.println();  // Print empty line in case of garbage
+  Serial.println("Starting up...");
   delay(100);
-  lcd.backlight();
-  delay(100);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Initializing...");
-
+  
+  Serial.println("Setting up pins...");
   // Initialize stepper motor pins
   pinMode(IN1_PIN, OUTPUT);
   pinMode(IN2_PIN, OUTPUT);
@@ -57,82 +54,20 @@ void setup() {
   digitalWrite(IN3_PIN, LOW);
   digitalWrite(IN4_PIN, LOW);
 
-  // Initialize WiFi
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  lcd.setCursor(0, 1);
-  lcd.print("WiFi Connecting");
-
-  int wifi_retry = 0;
-  while (WiFi.status() != WL_CONNECTED && wifi_retry < 20) {
-    delay(500);
-    Serial.print(".");
-    wifi_retry++;
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi connection failed");
-    lcd.setCursor(0, 1);
-    lcd.print("WiFi Failed    ");
-    delay(1000);
-    ESP.restart();
-    return;
-  }
-
-  Serial.println("WiFi connected");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  // Set up server endpoints
-  server.on("/lcd", HTTP_POST, handleLcdUpdate);
-  server.on("/start_rotation", HTTP_POST, handleStartRotation);
-  server.on("/abort", HTTP_POST, handleAbort);
+  Serial.println("Basic setup complete");
+  delay(1000);
   
-  server.begin();
-  Serial.println("HTTP server started");
-
-  // Register with main server
-  registerWithServer();
+  Serial.println("Testing loop will start soon...");
+  delay(1000);
 }
 
 void loop() {
-  server.handleClient();
-
-  // Handle heartbeat
-  if (is_registered && millis() - last_heartbeat > HEARTBEAT_INTERVAL) {
-    sendHeartbeat();
-    last_heartbeat = millis();
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint >= 1000) {  // Print every second
+    Serial.println("Loop running...");
+    lastPrint = millis();
   }
-
-  // If WiFi disconnects, try to reconnect
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected. Reconnecting...");
-    WiFi.disconnect(true);
-    delay(1000);
-    WiFi.begin(ssid, password);
-    lcd.setCursor(0, 1);
-    lcd.print("WiFi Reconnect ");
-    delay(5000);
-    return;
-  }
-
-  // Handle scanning process
-  if (is_scanning && current_step < STEPS_PER_ROTATION) {
-    rotateStepper();
-    delay(500); // Let the system stabilize
-
-    // Notify server of rotation completion
-    notifyRotationComplete();
-    
-    current_step++;
-    delay(500);
-  } else if (is_scanning && current_step >= STEPS_PER_ROTATION) {
-    is_scanning = false;
-    current_step = 0;
-    notifyScanComplete();
-  }
+  delay(100);  // Small delay to prevent watchdog issues
 }
 
 void registerWithServer() {

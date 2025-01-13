@@ -210,12 +210,23 @@ flash-controller: check-device ensure-port reset-port
 			echo "\n$(CYAN)Checking build files:$(RESET)"; \
 			ls -l build/*.bin 2>/dev/null || echo "$(RED)No build files found - run make build-controller first$(RESET)"; \
 			echo "\n$(YELLOW)Attempting upload...$(RESET)"; \
+			echo "$(CYAN)Debug: Checking files...$(RESET)"; \
+			echo "$(CYAN)Bootloader:$(RESET)"; \
+			ls -l build/controller.ino.bootloader.bin || echo "$(RED)Bootloader not found!$(RESET)"; \
+			echo "$(CYAN)Partition table:$(RESET)"; \
+			ls -l build/controller.ino.partitions.bin || echo "$(RED)Partition table not found!$(RESET)"; \
+			echo "$(CYAN)Boot app:$(RESET)"; \
+			ls -l /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/3.1.1/tools/partitions/boot_app0.bin || echo "$(RED)Boot app not found!$(RESET)"; \
+			echo "$(CYAN)Application:$(RESET)"; \
+			ls -l build/controller.ino.bin || echo "$(RED)Application not found!$(RESET)"; \
+			echo "$(CYAN)Flash command:$(RESET)"; \
+			echo "$(ESPTOOL) --port $$DEVICE --chip esp32c3 --baud $(UPLOAD_SPEED) write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect 0x0000 build/controller.ino.bootloader.bin 0x8000 build/controller.ino.partitions.bin 0xe000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/3.1.1/tools/partitions/boot_app0.bin 0x10000 build/controller.ino.bin"; \
 			$(ESPTOOL) --port $$DEVICE --chip esp32c3 --baud $(UPLOAD_SPEED) \
 				write_flash -z --flash_mode dio --flash_freq 40m --flash_size detect \
-				0x0000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/sdk/esp32c3/bin/bootloader_dio_40m.bin \
-				0x8000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/partitions/boot_app0.bin \
-				0xe000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/2.0.14/tools/partitions/default_8MB.bin \
-				0x10000 build/controller.ino.bin || \
+				0x0000 /Users/timmeeuwissen/Library/Caches/arduino/sketches/909B0D34A1397128B46731C5FE6DCB8A/controller.ino.bootloader.bin \
+				0x8000 /Users/timmeeuwissen/Library/Caches/arduino/sketches/909B0D34A1397128B46731C5FE6DCB8A/controller.ino.partitions.bin \
+				0xe000 /Users/timmeeuwissen/Library/Arduino15/packages/esp32/hardware/esp32/3.1.1/tools/partitions/boot_app0.bin \
+				0x10000 /Users/timmeeuwissen/Library/Caches/arduino/sketches/909B0D34A1397128B46731C5FE6DCB8A/controller.ino.bin || \
 			{ echo "\n$(RED)Upload failed. Troubleshooting steps:$(RESET)"; \
 			  echo "$(YELLOW)1. Try pressing the BOOT button while uploading$(RESET)"; \
 			  echo "$(YELLOW)2. Check physical connections$(RESET)"; \
@@ -245,7 +256,7 @@ clean-flash: check-device ensure-port reset-port
 	@echo "$(GREEN)Flash memory erased$(RESET)"
 	@sleep 2
 
-# Monitor targets
+# Monitor and Serial Output targets
 monitor-camera: check-device ensure-port
 	@echo "$(CYAN)Starting camera monitor...$(RESET)"
 	@if [ -f .device.env ]; then \
@@ -278,16 +289,50 @@ monitor-controller: check-device ensure-port
 		exit 1; \
 	fi
 
+serial-camera: check-device ensure-port
+	@echo "$(CYAN)Viewing camera serial output...$(RESET)"
+	@if [ -f .device.env ]; then \
+		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
+		if [ -e "$$DEVICE" ]; then \
+			echo "$(CYAN)Connected to: $$DEVICE$(RESET)"; \
+			echo "$(YELLOW)Press Ctrl+A then Ctrl+\ to exit$(RESET)"; \
+			screen $$DEVICE $(UPLOAD_SPEED); \
+		else \
+			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)Error: .device.env file not found$(RESET)"; \
+		exit 1; \
+	fi
+
+serial-controller: check-device ensure-port
+	@echo "$(CYAN)Viewing controller serial output...$(RESET)"
+	@if [ -f .device.env ]; then \
+		DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2); \
+		if [ -e "$$DEVICE" ]; then \
+			echo "$(CYAN)Connected to: $$DEVICE$(RESET)"; \
+			echo "$(YELLOW)Press Ctrl+A then Ctrl+\ to exit$(RESET)"; \
+			screen $$DEVICE $(UPLOAD_SPEED); \
+		else \
+			echo "$(RED)Error: Device $$DEVICE does not exist$(RESET)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)Error: .device.env file not found$(RESET)"; \
+		exit 1; \
+	fi
+
 # Test targets
 test-camera: check-device ensure-port
 	@echo "$(CYAN)Testing camera connection...$(RESET)"
 	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED) --timeout 5
+	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED)
 
 test-controller: check-device ensure-port
 	@echo "$(CYAN)Testing controller connection...$(RESET)"
 	@DEVICE=$$(cat .device.env | grep DEVICE | cut -d'=' -f2) && \
-	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED) --timeout 5
+	$(ARDUINO_CLI) monitor -p $$DEVICE -c baudrate=$(UPLOAD_SPEED)
 
 test-system: test-camera test-controller
 	@echo "$(CYAN)Testing complete system...$(RESET)"
@@ -359,12 +404,16 @@ help:
 	@echo "  $(BOLD)flash-controller$(RESET) - Flash controller firmware"
 	@echo "  $(BOLD)clean-flash$(RESET)     - Erase flash memory completely"
 	@echo
-	@echo "$(CYAN)Monitor & Test:$(RESET)"
-	@echo "  $(BOLD)monitor-camera$(RESET)    - Monitor camera output"
-	@echo "  $(BOLD)monitor-controller$(RESET) - Monitor controller output"
+	@echo "$(CYAN)Monitor & Serial:$(RESET)"
+	@echo "  $(BOLD)monitor-camera$(RESET)      - Monitor camera (arduino-cli)"
+	@echo "  $(BOLD)monitor-controller$(RESET)   - Monitor controller (arduino-cli)"
+	@echo "  $(BOLD)serial-camera$(RESET)       - View camera serial output (screen)"
+	@echo "  $(BOLD)serial-controller$(RESET)    - View controller serial output (screen)"
+	@echo
+	@echo "$(CYAN)Test:$(RESET)"
 	@echo "  $(BOLD)test-camera$(RESET)       - Test camera connection"
 	@echo "  $(BOLD)test-controller$(RESET)   - Test controller connection"
-	@echo "  $(BOLD)test-system$(RESET)      - Test complete system"
+	@echo "  $(BOLD)test-system$(RESET)       - Test complete system"
 	@echo
 	@echo "$(CYAN)Server Control:$(RESET)"
 	@echo "  $(BOLD)start$(RESET)        - Start the server"
